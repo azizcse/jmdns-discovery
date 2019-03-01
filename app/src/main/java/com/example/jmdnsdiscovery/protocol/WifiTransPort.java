@@ -27,13 +27,14 @@ public class WifiTransPort implements WifiDetector.Listener,WifiResolver.Listene
     private boolean restarting;
     private WifiDetector wifiDetector;
     private List<NsdLink> links = new ArrayList<>();
+    private DispatchQueue listenerQueue;
 
-    public WifiTransPort(int appId, String nodeId, Context context) {
+    public WifiTransPort(int appId, String nodeId, DispatchQueue listenerQueue, Context context) {
         this.queue = new DispatchQueue();
         this.appId = appId;
         this.nodeId = nodeId;
-        this.context = context;
-
+        this.context = context.getApplicationContext();
+        this.listenerQueue = listenerQueue;
         this.serviceType = "_mesh" + appId + "._tcp.";
         wifiDetector = new WifiDetector(this, queue, context);
         wifiResolver = new JmdResolver(serviceType, nodeId,this,queue, context);
@@ -77,7 +78,19 @@ public class WifiTransPort implements WifiDetector.Listener,WifiResolver.Listene
 
     @Override
     public void linkConnected(NsdLink link) {
+        if (!running) {
+            link.disconnect();
+            return;
+        }
 
+        links.add(link);
+
+        listenerQueue.dispatch(new Runnable() {
+            @Override
+            public void run() {
+                //listener.transportLinkConnected(NsdTransport.this, link);
+            }
+        });
     }
 
     @Override

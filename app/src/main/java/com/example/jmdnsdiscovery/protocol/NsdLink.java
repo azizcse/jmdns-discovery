@@ -5,6 +5,7 @@ import android.util.Log;
 import com.example.jmdnsdiscovery.dispatch.SerialExecutorService;
 import com.example.jmdnsdiscovery.protobuf.Frames;
 import com.example.jmdnsdiscovery.util.Config;
+import com.google.protobuf.ByteString;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,7 +14,11 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -22,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
-public class NsdLink {
+public class NsdLink implements Link{
     public enum State {
         CONNECTING,
         CONNECTED,
@@ -45,6 +50,8 @@ public class NsdLink {
 
     private ScheduledThreadPoolExecutor pool;
     private ExecutorService outputExecutor;
+    private boolean shouldCloseWhenOutputIsEmpty = false;
+    private Queue<Frames.Frame> outputQueue = new LinkedList<>();
 
     public NsdLink(NsdServer server, Socket socket) {
         // Any thread
@@ -84,8 +91,57 @@ public class NsdLink {
         outputExecutor = new SerialExecutorService(pool);
     }
 
+
+    @Override
     public String getNodeId(){
         return nodeId;
+    }
+
+    @Override
+    public int getPriority() {
+        return 0;
+    }
+
+    @Override
+    public void disconnect() {
+        outputExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                shouldCloseWhenOutputIsEmpty = true;
+                writeNextFrame();
+            }
+        });
+    }
+
+    @Override
+    public boolean isConnected() {
+        return state == State.CONNECTED;
+    }
+
+    @Override
+    public void sendFrame(byte[] frameData) {
+// Listener thread.
+        if (state != State.CONNECTED)
+            return;
+
+        Frames.Frame.Builder builder = Frames.Frame.newBuilder();
+        builder.setKind(Frames.Frame.Kind.PAYLOAD);
+
+        Frames.PayloadFrame.Builder payload = Frames.PayloadFrame.newBuilder();
+        payload.setPayload(ByteString.copyFrom(frameData));
+        builder.setPayload(payload);
+
+        final Frames.Frame frame = builder.build();
+
+        sendLinkFrame(frame);
+    }
+
+    void sendLinkFrame(final Frames.Frame frame) {
+        // Listener thread.
+        if (state != State.CONNECTED)
+            return;
+
+        enqueueFrame(frame);
     }
 
     @Override
@@ -96,6 +152,82 @@ public class NsdLink {
                 + " " + host.toString()
                 + ":" + port;
     }
+
+    private void enqueueFrame(final Frames.Frame frame) {
+        // Any thread.
+        outputExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                outputQueue.add(frame);
+                writeNextFrame();
+            }
+        });
+    }
+
+
+    private void writeNextFrame() {
+        // Output thread.
+        if (state == State.DISCONNECTED) {
+            outputQueue.clear();
+            return;
+        }
+
+        byte[] frameBytes;
+
+        {
+            Frames.Frame frame = outputQueue.poll();
+            if (frame == null) {
+                if (shouldCloseWhenOutputIsEmpty) {
+                    try {
+                        outputStream.close();
+                        socket.close();
+                    } catch (IOException e) {
+                    }
+                }
+
+                //Logger.debug("nsd link outputQueue empty");
+                return;
+            }
+
+            frameBytes = frame.toByteArray();
+        }
+
+        if (!writeFrameBytes(frameBytes)) {
+            outputQueue.clear();
+            return;
+        }
+
+        outputExecutor.execute(new Runnable() {
+            @Override
+            public void run() {
+                writeNextFrame();
+            }
+        });
+    }
+
+
+    private boolean writeFrameBytes(byte[] frameBytes) {
+        // Output thread.
+        ByteBuffer header = ByteBuffer.allocate(4);
+        header.order(ByteOrder.BIG_ENDIAN);
+        header.putInt(frameBytes.length);
+
+        try {
+            outputStream.write(header.array());
+            outputStream.write(frameBytes);
+            outputStream.flush();
+        } catch (IOException ex) {
+            try {
+                outputStream.close();
+                socket.close();
+            } catch (IOException e) {
+            }
+
+            return false;
+        }
+
+        return true;
+    } // writeFrame
 
     void connect() {
         // Queue
@@ -191,11 +323,36 @@ public class NsdLink {
     }
 
     private void sendHelloFrame() {
+        // Input thread.
+        Frames.Frame.Builder builder = Frames.Frame.newBuilder();
+        builder.setKind(Frames.Frame.Kind.HELLO);
 
+        Frames.HelloFrame.Builder payload = Frames.HelloFrame.newBuilder();
+        payload.setNodeId(server.getNodeId());
+        payload.setPeer(
+                Frames.Peer.newBuilder()
+                        .setAddress(ByteString.copyFrom(new byte[0]))
+                        .setLegacy(false)
+                        .addAllPorts(new ArrayList<Integer>())
+        );
+
+        builder.setHello(payload);
+
+        final Frames.Frame frame = builder.build();
+        enqueueFrame(frame);
     }
 
     private void sendHeartbeat() {
+        // Any thread
+        Frames.Frame.Builder builder = Frames.Frame.newBuilder();
+        builder.setKind(Frames.Frame.Kind.HEARTBEAT);
 
+        Frames.HeartbeatFrame.Builder payload = Frames.HeartbeatFrame.newBuilder();
+
+        builder.setHeartbeat(payload);
+
+        final Frames.Frame frame = builder.build();
+        enqueueFrame(frame);
     }
 
     private void inputLoop() {

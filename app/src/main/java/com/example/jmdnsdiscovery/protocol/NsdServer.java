@@ -45,6 +45,10 @@ public class NsdServer {
         this.queue = queue;
     }
 
+    public String getNodeId() {
+        return nodeId;
+    }
+
     public void startAccepting(final InetAddress address) {
         if (accepting)
             return;
