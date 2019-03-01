@@ -46,6 +46,20 @@ public class NsdLink {
     private ScheduledThreadPoolExecutor pool;
     private ExecutorService outputExecutor;
 
+    public NsdLink(NsdServer server, Socket socket) {
+        // Any thread
+        super();
+        this.client = false;
+        this.server = server;
+        this.socket = socket;
+        this.host = socket.getInetAddress();
+        this.port = socket.getPort();
+
+        configureOutput();
+    }
+
+
+
     public NsdLink(NsdServer server, String nodeId, InetAddress host, int port){
         this.client = true;
         this.server = server;
@@ -289,7 +303,7 @@ public class NsdLink {
                 server.queue.execute(new Runnable() {
                     @Override
                     public void run() {
-                       // server.linkDidReceiveFrame(NsdLink.this, frameData);
+                       server.linkDidReceiveFrame(NsdLink.this, frameData);
                     }
                 });
 

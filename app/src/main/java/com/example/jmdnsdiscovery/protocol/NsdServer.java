@@ -108,12 +108,12 @@ public class NsdServer {
                 continue;
             }
 
-            final NsdLink link = new NsdLink();
+            final NsdLink link = new NsdLink(this, socket);
             queue.execute(new Runnable() {
                 @Override
                 public void run() {
-                    //linkConnecting(link);
-                    //link.connect();
+                    linkConnecting(link);
+                    link.connect();
                 }
             });
         } // while
@@ -132,6 +132,18 @@ public class NsdServer {
         if (wasConnected) {
             listener.linkDisconnected(link);
         }
+    }
+
+    //region Links
+    private void linkConnecting(NsdLink link) {
+        // Queue.
+        linksConnecting.add(link);
+    }
+
+
+    void linkDidReceiveFrame(NsdLink link, byte[] frameData) {
+        // Queue.
+        listener.linkDidReceiveFrame(link, frameData);
     }
 
 }
