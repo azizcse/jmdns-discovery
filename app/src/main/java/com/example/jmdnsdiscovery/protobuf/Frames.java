@@ -2518,7 +2518,7 @@ public final class Frames {
     /**
      * <code>required int64 nodeId = 1;</code>
      */
-    long getNodeId();
+    String getNodeId();
 
     /**
      * <code>required .Peer peer = 2;</code>
@@ -2587,7 +2587,7 @@ public final class Frames {
             }
             case 8: {
               bitField0_ |= 0x00000001;
-              nodeId_ = input.readInt64();
+              nodeId_ = input.readString();
               break;
             }
             case 18: {
@@ -2709,7 +2709,7 @@ public final class Frames {
                         throws java.io.IOException {
       getSerializedSize();
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
-        output.writeInt64(1, nodeId_);
+        output.writeString(1, nodeId_);
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
         output.writeMessage(2, peer_);
@@ -2725,7 +2725,7 @@ public final class Frames {
       size = 0;
       if (((bitField0_ & 0x00000001) == 0x00000001)) {
         size += com.google.protobuf.CodedOutputStream
-          .computeInt64Size(1, nodeId_);
+          .computeStringSize(1, nodeId_);
       }
       if (((bitField0_ & 0x00000002) == 0x00000002)) {
         size += com.google.protobuf.CodedOutputStream
@@ -2849,7 +2849,7 @@ public final class Frames {
 
       public Builder clear() {
         super.clear();
-        nodeId_ = 0L;
+        nodeId_ = "";
         bitField0_ = (bitField0_ & ~0x00000001);
         if (peerBuilder_ == null) {
           peer_ = Peer.getDefaultInstance();
@@ -2985,7 +2985,7 @@ public final class Frames {
        */
       public Builder clearNodeId() {
         bitField0_ = (bitField0_ & ~0x00000001);
-        nodeId_ = 0L;
+        nodeId_ = "";
         onChanged();
         return this;
       }

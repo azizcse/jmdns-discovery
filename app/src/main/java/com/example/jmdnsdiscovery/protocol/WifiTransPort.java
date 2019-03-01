@@ -54,7 +54,7 @@ public class WifiTransPort implements WifiDetector.Listener,WifiResolver.Listene
 
             //   logDark("Resolved Node > " + name);
 
-            server.connect(linkNodeId, InetAddress.getByName(address), port);
+            server.connect(nodeId, InetAddress.getByName(address), port);
         } catch (NumberFormatException ex) {
             return;
         } catch (UnknownHostException ex) {
