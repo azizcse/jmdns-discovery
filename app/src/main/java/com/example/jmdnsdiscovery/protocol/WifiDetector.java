@@ -27,6 +27,7 @@ import android.net.wifi.WifiManager;
 import android.text.format.Formatter;
 import android.util.Log;
 
+import com.example.jmdnsdiscovery.AppLog;
 import com.example.jmdnsdiscovery.BuildConfig;
 import com.example.jmdnsdiscovery.dispatch.DispatchQueue;
 import com.example.jmdnsdiscovery.util.BnjUtil;
@@ -68,8 +69,9 @@ public class WifiDetector {
             return;
 
         running = true;
+        AppLog.v("WifiDetector Started ");
 
-        if (isConnectedViaWifi()|| isWifiConnected()) {
+        if (isConnectedViaWifi() || isWifiConnected()) {
 
             final InetAddress address = determineAddress();
 
@@ -89,14 +91,15 @@ public class WifiDetector {
 
             final InetAddress myAddress = BnjUtil.getMyDeviceInetAddress(true);
 
-            if(myAddress != null && myAddress.toString().contains(LOCAL_IP_FIRST_PORTION)){
+            if (myAddress != null && myAddress.toString().contains(LOCAL_IP_FIRST_PORTION)) {
                 tempAddress = myAddress;
-            }else{
-                tempAddress =  BnjUtil.getLocalIpAddress();;
+            } else {
+                tempAddress = BnjUtil.getLocalIpAddress();
+                ;
             }
 
-            final  InetAddress finalAddress = tempAddress;
-
+            final InetAddress finalAddress = tempAddress;
+            AppLog.v("isHotspotEnabled in Address " + myAddress);
 
             if (finalAddress != null) {
                 connected = true;
@@ -133,7 +136,7 @@ public class WifiDetector {
     } // stop
 
     private boolean isConnectedViaWifi() {
-       ConnectivityManager connectivityManager =
+        ConnectivityManager connectivityManager =
                 (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo info = connectivityManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
 
@@ -195,14 +198,7 @@ public class WifiDetector {
     private void onReceive_NETWORK_STATE_CHANGED_ACTION(Context context, Intent intent) {
         NetworkInfo info = intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO);
 
-
-
-
-
         if (NetworkInfo.State.CONNECTED.equals(info.getState())) {
-            // Wi-Fi connection established
-            //Logger.debug("wifi NETWORK_STATE_CHANGED_ACTION connected");
-
             if (connected)
                 return;
 
@@ -225,9 +221,6 @@ public class WifiDetector {
         }
 
         if (NetworkInfo.State.DISCONNECTED.equals(info.getState())) {
-            // Wi-Fi connection was lost
-            //Logger.debug("wifi NETWORK_STATE_CHANGED_ACTION disconnected");
-
             if (!connected)
                 return;
 
@@ -245,8 +238,6 @@ public class WifiDetector {
 
     private void onReceive_NETWORK_AP_STATE_CHANGED_ACTION(Context context, Intent intent) {
 
-
-
         if (isConnectedViaWifi() || isWifiConnected()) return;
 
         int apState = intent.getIntExtra("wifi_state", 0);
@@ -258,13 +249,14 @@ public class WifiDetector {
 
             final InetAddress myAddress = BnjUtil.getMyDeviceInetAddress(true);
 
-            if(myAddress != null && myAddress.toString().contains(LOCAL_IP_FIRST_PORTION)){
+            if (myAddress != null && myAddress.toString().contains(LOCAL_IP_FIRST_PORTION)) {
                 tempAddress = myAddress;
-            }else{
-                tempAddress =  BnjUtil.getLocalIpAddress();;
+            } else {
+                tempAddress = BnjUtil.getLocalIpAddress();
+                ;
             }
 
-            final  InetAddress finalAddress = tempAddress;
+            final InetAddress finalAddress = tempAddress;
 
             if (finalAddress == null)
                 return;

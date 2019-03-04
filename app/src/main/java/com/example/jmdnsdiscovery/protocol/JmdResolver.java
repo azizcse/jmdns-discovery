@@ -7,6 +7,9 @@ import android.util.Log;
 import com.example.jmdnsdiscovery.AppLog;
 import com.example.jmdnsdiscovery.dispatch.DispatchQueue;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.logging.Logger;
@@ -84,16 +87,22 @@ public class JmdResolver implements WifiResolver, ServiceListener {
         try {
             lock.release();
         } catch (Exception releaseLock) {
-
+            AppLog.v("jmdns failed lock.release()");
         }
     }
 
     private void startPublishInternal(int port) {
-        ServiceInfo serviceInfo = ServiceInfo.create(serviceType, serviceName, port, null);
+        JSONObject jo = new JSONObject();
+        try {
+            jo.put("hi","value");
+            jo.put("may","value2");
+        }catch (JSONException e){}
+
+        ServiceInfo serviceInfo = ServiceInfo.create(serviceType, serviceName, port, jo.toString());
         try {
             jmdns.registerService(serviceInfo);
         } catch (IOException | NullPointerException ex) {
-
+            AppLog.v("jmd failed registerService()");
         }
     }
 
@@ -115,7 +124,7 @@ public class JmdResolver implements WifiResolver, ServiceListener {
                 lock.release();
             } catch (Exception releaseLock) {
             }
-            //Logger.error("jmdns failed jmdns.create() {}", ex);
+            AppLog.v("jmdns failed jmdns.create() {}");
             return false;
         }
 
@@ -137,7 +146,7 @@ public class JmdResolver implements WifiResolver, ServiceListener {
 
     @Override
     public void serviceRemoved(ServiceEvent event) {
-
+        AppLog.v("jmd serviceRemoved '{}' '{}'"+event.getName());
     }
 
     @Override

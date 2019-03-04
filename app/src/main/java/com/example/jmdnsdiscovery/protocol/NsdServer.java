@@ -2,6 +2,8 @@ package com.example.jmdnsdiscovery.protocol;
 
 import android.util.Log;
 
+import com.example.jmdnsdiscovery.AppLog;
+
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -62,6 +64,7 @@ public class NsdServer {
         try {
             serverSocket = new ServerSocket(0, 50, address);
         } catch (IOException ex) {
+            AppLog.v("nsd ServerSocket create failed: {}");
             queue.execute(new Runnable() {
                 @Override
                 public void run() {
@@ -94,6 +97,20 @@ public class NsdServer {
         acceptThread.start();
     }
 
+    public void stopAccepting() {
+        if (!accepting)
+            return;
+
+        synchronized (this) {
+            accepting = false;
+        }
+
+        try {
+            serverSocket.close();
+        } catch (NullPointerException | IOException ex) {
+        }
+    } // stopAccepting
+
     private void accept() {
         // Accept thread.
 
@@ -108,10 +125,10 @@ public class NsdServer {
             try {
                 socket = serverSocket.accept();
             } catch (IOException ex) {
-                //Logger.warn("nsd accept() failed: {}", ex);
+                AppLog.v("nsd accept() failed: {}");
                 continue;
             }
-
+            AppLog.v("Accept new link ..............");
             final NsdLink link = new NsdLink(this, socket);
             queue.execute(new Runnable() {
                 @Override
@@ -128,6 +145,17 @@ public class NsdServer {
         linkConnecting(link);
         link.connect();
     }
+    //region Links
+    private void linkConnecting(NsdLink link) {
+        // Queue.
+        linksConnecting.add(link);
+    }
+
+    void linkConnected(NsdLink link) {
+        // Queue.
+        linksConnecting.remove(link);
+        listener.linkConnected(link);
+    }
 
     void linkDisconnected(NsdLink link, boolean wasConnected) {
         // Queue.
@@ -138,11 +166,7 @@ public class NsdServer {
         }
     }
 
-    //region Links
-    private void linkConnecting(NsdLink link) {
-        // Queue.
-        linksConnecting.add(link);
-    }
+
 
 
     void linkDidReceiveFrame(NsdLink link, byte[] frameData) {

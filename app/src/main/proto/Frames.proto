@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package protobuf;
+
+enum Kind {
+    HELLO = 0;
+    HEARTBEAT = 1;
+    MESSAGE = 2;
+}
+
+message Frame {
+    Kind kind = 1;
+    oneof data {
+        Hello helloMsg = 2;
+        HeartBit bitMsg = 3;
+        Message message = 4;
+    }
+
+}
+
+message Hello {
+    string nodeId = 1;
+}
+
+message HeartBit {
+}
+
+message Message {
+    bytes message = 1;
+}

@@ -2,8 +2,8 @@ package com.example.jmdnsdiscovery.protocol;
 
 import android.util.Log;
 
+import com.example.jmdnsdiscovery.AppLog;
 import com.example.jmdnsdiscovery.dispatch.SerialExecutorService;
-import com.example.jmdnsdiscovery.protobuf.Frames;
 import com.example.jmdnsdiscovery.util.Config;
 import com.google.protobuf.ByteString;
 
@@ -26,8 +26,13 @@ import java.util.concurrent.TimeUnit;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import protobuf.Frames;
+import protobuf.Frames.Message;
+import protobuf.Frames.Frame;
+import protobuf.Frames.Hello;
 
-public class NsdLink implements Link{
+
+public class NsdLink implements Link {
     public enum State {
         CONNECTING,
         CONNECTED,
@@ -51,7 +56,7 @@ public class NsdLink implements Link{
     private ScheduledThreadPoolExecutor pool;
     private ExecutorService outputExecutor;
     private boolean shouldCloseWhenOutputIsEmpty = false;
-    private Queue<Frames.Frame> outputQueue = new LinkedList<>();
+    private Queue<Frame> outputQueue = new LinkedList<>();
 
     public NsdLink(NsdServer server, Socket socket) {
         // Any thread
@@ -61,13 +66,12 @@ public class NsdLink implements Link{
         this.socket = socket;
         this.host = socket.getInetAddress();
         this.port = socket.getPort();
-
         configureOutput();
     }
 
 
-
-    public NsdLink(NsdServer server, String nodeId, InetAddress host, int port){
+    public NsdLink(NsdServer server, String nodeId, InetAddress host, int port) {
+        super();
         this.client = true;
         this.server = server;
         this.nodeId = nodeId;
@@ -93,7 +97,7 @@ public class NsdLink implements Link{
 
 
     @Override
-    public String getNodeId(){
+    public String getNodeId() {
         return nodeId;
     }
 
@@ -120,24 +124,19 @@ public class NsdLink implements Link{
 
     @Override
     public void sendFrame(byte[] frameData) {
-// Listener thread.
-        if (state != State.CONNECTED)
-            return;
 
-        Frames.Frame.Builder builder = Frames.Frame.newBuilder();
-        builder.setKind(Frames.Frame.Kind.PAYLOAD);
+        Message.Builder message = Message.newBuilder();
+        message.setMessage(ByteString.copyFrom(frameData));
 
-        Frames.PayloadFrame.Builder payload = Frames.PayloadFrame.newBuilder();
-        payload.setPayload(ByteString.copyFrom(frameData));
-        builder.setPayload(payload);
+        Frame.Builder builder = Frame.newBuilder();
+        builder.setKind(Frames.Kind.MESSAGE);
+        builder.setMessage(message);
 
-        final Frames.Frame frame = builder.build();
-
+        final Frame frame = builder.build();
         sendLinkFrame(frame);
     }
 
-    void sendLinkFrame(final Frames.Frame frame) {
-        // Listener thread.
+    void sendLinkFrame(final Frame frame) {
         if (state != State.CONNECTED)
             return;
 
@@ -237,7 +236,7 @@ public class NsdLink implements Link{
                 connectImpl();
             }
         });
-        inputThread.setName("NsdLink " + this.hashCode() + " Input");
+        inputThread.setName("wifi " + this.hashCode() + " Input");
         inputThread.setDaemon(true);
         inputThread.start();
     } // connect
@@ -246,11 +245,12 @@ public class NsdLink implements Link{
         // Input thread.
         if (client) {
             try {
-                Log.e("JMDNS_LOG","Socket connect host="+host+" port ="+port);
+                AppLog.v( "Socket connect host=" + host + " port =" + port);
 
 
                 this.socket = new Socket(host, port);
             } catch (IOException ex) {
+                AppLog.v("nsd link connect failed to host ="+ host+ " port ="+port);
                 notifyDisconnect();
                 return;
             }
@@ -314,6 +314,7 @@ public class NsdLink implements Link{
             inputStream = socket.getInputStream();
             outputStream = socket.getOutputStream();
         } catch (IOException ex) {
+           AppLog.v("nsd link streams get failed {}");
             return false;
         }
 
@@ -323,36 +324,22 @@ public class NsdLink implements Link{
     }
 
     private void sendHelloFrame() {
-        // Input thread.
-        Frames.Frame.Builder builder = Frames.Frame.newBuilder();
-        builder.setKind(Frames.Frame.Kind.HELLO);
-
-        Frames.HelloFrame.Builder payload = Frames.HelloFrame.newBuilder();
-        payload.setNodeId(server.getNodeId());
-        payload.setPeer(
-                Frames.Peer.newBuilder()
-                        .setAddress(ByteString.copyFrom(new byte[0]))
-                        .setLegacy(false)
-                        .addAllPorts(new ArrayList<Integer>())
-        );
-
-        builder.setHello(payload);
-
-        final Frames.Frame frame = builder.build();
-        enqueueFrame(frame);
+        Hello.Builder builder = Hello.newBuilder();
+        builder.setNodeId(server.getNodeId());
+        Frame.Builder frame = Frame.newBuilder();
+        frame.setKind(Frames.Kind.HELLO);
+        frame.setHelloMsg(builder);
+        final Frame msg = frame.build();
+        enqueueFrame(msg);
     }
 
     private void sendHeartbeat() {
-        // Any thread
-        Frames.Frame.Builder builder = Frames.Frame.newBuilder();
-        builder.setKind(Frames.Frame.Kind.HEARTBEAT);
-
-        Frames.HeartbeatFrame.Builder payload = Frames.HeartbeatFrame.newBuilder();
-
-        builder.setHeartbeat(payload);
-
-        final Frames.Frame frame = builder.build();
-        enqueueFrame(frame);
+        Frames.HeartBit.Builder heartBit = Frames.HeartBit.newBuilder();
+        Frame.Builder frame = Frame.newBuilder();
+        frame.setKind(Frames.Kind.HEARTBEAT);
+        frame.setBitMsg(heartBit);
+        Frame message = frame.build();
+        enqueueFrame(message);
     }
 
     private void inputLoop() {
@@ -381,6 +368,8 @@ public class NsdLink implements Link{
                 inputData.capacity(inputData.writerIndex() + bufferSize);
             } // while
         } catch (InterruptedIOException ex) {
+            ex.printStackTrace();
+            AppLog.v("NSD_timeout", ex.toString());
             try {
                 inputStream.close();
             } catch (IOException ioex) {
@@ -389,6 +378,7 @@ public class NsdLink implements Link{
             notifyDisconnect();
             return;
         } catch (Exception ex) {
+            AppLog.v("nsd input read failed: {}");
             try {
                 inputStream.close();
             } catch (IOException ioex) {
@@ -397,6 +387,7 @@ public class NsdLink implements Link{
             notifyDisconnect();
             return;
         }
+        AppLog.v("nsd input read end");
         notifyDisconnect();
     } // inputLoop
 
@@ -404,70 +395,77 @@ public class NsdLink implements Link{
         final int headerSize = 4;
 
         while (true) {
-            if (inputData.readableBytes() < headerSize)
+            if (inputData.readableBytes() < headerSize) {
+                AppLog.v("Readable string leass then header");
                 break;
+            }
 
             inputData.markReaderIndex();
             int frameSize = inputData.readInt();
 
             if (frameSize > Config.frameSizeMax) {
+                AppLog.v("Readable string max size");
                 return false;
             }
 
             if (inputData.readableBytes() < frameSize) {
+                AppLog.v("inputData.readableBytes() < frameSize ="+frameSize);
                 inputData.resetReaderIndex();
                 break;
             }
 
-            final Frames.Frame frame;
+            final Frame frame;
 
             {
                 final byte[] frameBody = new byte[frameSize];
                 inputData.readBytes(frameBody, 0, frameSize);
 
                 try {
-                    frame = Frames.Frame.parseFrom(frameBody);
+                    frame = Frame.parseFrom(frameBody);
                 } catch (Exception ex) {
+                    AppLog.v("Frame parse exception");
                     continue;
                 }
             }
 
             if (this.state == State.CONNECTING) {
-                if (frame.getKind() != Frames.Frame.Kind.HELLO)
+                if (frame.getKind() != Frames.Kind.HELLO)
                     continue;
 
-                this.nodeId = frame.getHello().getNodeId();
+                this.nodeId = frame.getHelloMsg().getNodeId();
                 this.state = State.CONNECTED;
 
+                AppLog.v("Hello frame received...............");
                 server.queue.execute(new Runnable() {
                     @Override
                     public void run() {
-                        //server.linkConnected(NsdLink.this);
+                        server.linkConnected(NsdLink.this);
                     }
                 });
 
                 continue;
             }
 
-            if (frame.getKind() == Frames.Frame.Kind.PAYLOAD) {
-                if (!frame.hasPayload() || !frame.getPayload().hasPayload())
+            if (frame.getKind() == Frames.Kind.MESSAGE) {
+                if (frame.getMessage() == null)
                     continue;
 
-                final byte[] frameData = frame.getPayload().getPayload().toByteArray();
+                final byte[] frameData = frame.getMessage().toByteArray();
                 if (frameData.length == 0)
                     continue;
 
                 server.queue.execute(new Runnable() {
                     @Override
                     public void run() {
-                       server.linkDidReceiveFrame(NsdLink.this, frameData);
+                        server.linkDidReceiveFrame(NsdLink.this, frameData);
                     }
                 });
 
                 continue;
             }
 
-            if (frame.getKind() == Frames.Frame.Kind.HEARTBEAT) {
+            if (frame.getKind() == Frames.Kind.HEARTBEAT) {
+                //AppLog.v("Heart bit received");
                 continue;
             }
         } // while

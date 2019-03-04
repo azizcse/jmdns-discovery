@@ -2,6 +2,8 @@ package com.example.jmdnsdiscovery.protocol;
 
 import android.content.Context;
 
+import com.example.jmdnsdiscovery.AppLog;
+import com.example.jmdnsdiscovery.dispatch.ConnectionListener;
 import com.example.jmdnsdiscovery.dispatch.DispatchQueue;
 
 import java.net.InetAddress;
@@ -10,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-public class WifiTransPort implements WifiDetector.Listener,WifiResolver.Listener,NsdServer.Listener, Transport{
+public class WifiTransPort implements WifiDetector.Listener, WifiResolver.Listener, NsdServer.Listener, Transport {
 
     enum Mode {NONE, WIFI, HOTSPOT}
 
@@ -28,124 +30,25 @@ public class WifiTransPort implements WifiDetector.Listener,WifiResolver.Listene
     private WifiDetector wifiDetector;
     private List<NsdLink> links = new ArrayList<>();
     private DispatchQueue listenerQueue;
+    private ConnectionListener connectionListener;
 
-    public WifiTransPort(int appId, String nodeId, DispatchQueue listenerQueue, Context context) {
+    public WifiTransPort(int appId, String nodeId, ConnectionListener connectionListener, DispatchQueue listenerQueue, Context context) {
         this.queue = new DispatchQueue();
         this.appId = appId;
         this.nodeId = nodeId;
         this.context = context.getApplicationContext();
         this.listenerQueue = listenerQueue;
+        this.connectionListener = connectionListener;
         this.serviceType = "_mesh" + appId + "._tcp.";
+
         wifiDetector = new WifiDetector(this, queue, context);
-        wifiResolver = new JmdResolver(serviceType, nodeId,this,queue, context);
-        server = new NsdServer(nodeId,this, queue);
-    }
-
-    @Override
-    public void onBonjourServiceResolved(String name, String address, int port) {
-        if (!running)
-            return;
-
-        try {
-
-            for (NsdLink link : links) {
-                if (link.getNodeId().equals(name))
-                    return;
-            }
-
-            //   logDark("Resolved Node > " + name);
-
-            server.connect(nodeId, InetAddress.getByName(address), port);
-        } catch (NumberFormatException ex) {
-            return;
-        } catch (UnknownHostException ex) {
-            return;
-        }
-    }
-
-    @Override
-    public void onServerAccepting(InetAddress address, int port) {
-        if (!running)
-            return;
-
-        wifiResolver.start(address, port);
-    }
-
-    @Override
-    public void onServerError(InetAddress address) {
-
-    }
-
-    @Override
-    public void linkConnected(NsdLink link) {
-        if (!running) {
-            link.disconnect();
-            return;
-        }
-
-        links.add(link);
-
-        listenerQueue.dispatch(new Runnable() {
-            @Override
-            public void run() {
-                //listener.transportLinkConnected(NsdTransport.this, link);
-            }
-        });
-    }
-
-    @Override
-    public void linkDisconnected(NsdLink link) {
-
-    }
-
-    @Override
-    public void linkDidReceiveFrame(NsdLink link, byte[] frameData) {
-
+        wifiResolver = new JmdResolver(serviceType, nodeId, this, queue, context);
+        server = new NsdServer(nodeId, this, queue);
     }
 
     /********************************************************************/
-    /************************ Transport callback**************************/
+    /************************ Transport callback*************************/
     /********************************************************************/
-
-    private void startInternal() {
-        if (running)
-            return;
-        running = true;
-        wifiDetector.start();
-    } // startInternal()
-
-    private void stopInternal() {
-        if (!running)
-            return;
-        running = false;
-        wifiDetector.stop();
-    }
-
-    private void forceStopInternal() {
-        if (!running)
-            return;
-        running = false;
-        wifiDetector.stop();
-        if (mode == Mode.NONE || mode == Mode.WIFI) {
-            onWifiDisabled();
-        } else if (mode == Mode.HOTSPOT) {
-            onHotspotDisabled();
-        }
-    }
-
-    private void restartInternal() {
-        if (restarting) {
-            return;
-        }
-        restarting = true;
-        wifiDetector.stop();
-        if (mode == Mode.NONE || mode == Mode.WIFI) {
-            onWifiDisabled();
-        } else if (mode == Mode.HOTSPOT) {
-            onHotspotDisabled();
-        }
-    }
-
 
     @Override
     public void start() {
@@ -186,12 +89,58 @@ public class WifiTransPort implements WifiDetector.Listener,WifiResolver.Listene
             }
         });
     }
+
+    private void startInternal() {
+        AppLog.v("NsdTransport StartInternal: " + running);
+        if (running)
+            return;
+        running = true;
+        wifiDetector.start();
+    } // startInternal()
+
+    private void stopInternal() {
+        if (!running)
+            return;
+        running = false;
+        wifiDetector.stop();
+    }
+
+    private void forceStopInternal() {
+        AppLog.v("NsdTransport ForceStopInternal: " + running);
+        if (!running)
+            return;
+        running = false;
+        wifiDetector.stop();
+        if (mode == Mode.NONE || mode == Mode.WIFI) {
+            onWifiDisabled();
+        } else if (mode == Mode.HOTSPOT) {
+            onHotspotDisabled();
+        }
+    }
+
+    private void restartInternal() {
+        AppLog.v("NsdTransport Restarting " + restarting);
+        if (restarting) {
+            return;
+        }
+        restarting = true;
+        wifiDetector.stop();
+        if (mode == Mode.NONE || mode == Mode.WIFI) {
+            onWifiDisabled();
+        } else if (mode == Mode.HOTSPOT) {
+            onHotspotDisabled();
+        }
+    }
+
+
     /****************************************************/
     /******************** Wifi detector listener ********/
     /****************************************************/
 
     @Override
     public void onWifiEnabled(InetAddress address) {
+       AppLog.v("bnj wifi enabled {}", address.toString());
+
         if (mode == Mode.HOTSPOT) {
             onWifiDisabled();
         }
@@ -202,7 +151,9 @@ public class WifiTransPort implements WifiDetector.Listener,WifiResolver.Listene
 
     @Override
     public void onWifiDisabled() {
-        //server.stopAccepting();
+        AppLog.v("WiFi Disabled");
+
+        server.stopAccepting();
         wifiResolver.stop();
         mode = Mode.NONE;
 
@@ -225,7 +176,8 @@ public class WifiTransPort implements WifiDetector.Listener,WifiResolver.Listene
 
     @Override
     public void onHotspotDisabled() {
-        //server.stopAccepting();
+        AppLog.v("Hotspot Disabled");
+        server.stopAccepting();
         wifiResolver.stop();
         mode = Mode.NONE;
 
@@ -234,4 +186,99 @@ public class WifiTransPort implements WifiDetector.Listener,WifiResolver.Listene
             wifiDetector.start();
         }
     }
+
+    /********************************************************************/
+    /************************ End Wifi detector listener*****************/
+    /********************************************************************/
+
+    @Override
+    public void onBonjourServiceResolved(String name, String address, int port) {
+        if (!running)
+            return;
+
+       AppLog.v("To Resolve Node  Name =" + name+" address ="+address+" port ="+port);
+
+        try {
+
+            for (NsdLink link : links) {
+                if (link.getNodeId().equals(name))
+                    return;
+            }
+
+            //   logDark("Resolved Node > " + name);
+            AppLog.v("Connect with server.......");
+            server.connect(nodeId, InetAddress.getByName(address), port);
+        } catch (NumberFormatException ex) {
+            AppLog.v("bnj failed to parse link nodeId "+ name);
+            return;
+        } catch (UnknownHostException ex) {
+            AppLog.v("bnj failed to parse link address "+ address);
+            return;
+        }
+    }
+
+    @Override
+    public void onServerAccepting(InetAddress address, int port) {
+        if (!running)
+            return;
+
+        wifiResolver.start(address, port);
+    }
+
+    @Override
+    public void onServerError(InetAddress address) {
+        if (!running)
+            return;
+
+        wifiResolver.startResolveOnly(address);
+    }
+
+    @Override
+    public void linkConnected(NsdLink link) {
+        if (!running) {
+            link.disconnect();
+            return;
+        }
+
+        links.add(link);
+
+        listenerQueue.dispatch(new Runnable() {
+            @Override
+            public void run() {
+                /**
+                 * Callback to UI
+                 */
+                connectionListener.linkConnected(link);
+                AppLog.v("Wifi link connected...........");
+            }
+        });
+    }
+
+    @Override
+    public void linkDisconnected(NsdLink link) {
+        // Queue.
+        links.remove(link);
+
+        listenerQueue.dispatch(new Runnable() {
+            @Override
+            public void run() {
+                AppLog.v("Wifi link dis connected.............");
+                connectionListener.linkDisconnected(link);
+            }
+        });
+    }
+
+    @Override
+    public void linkDidReceiveFrame(NsdLink link, byte[] frameData) {
+        if (!running)
+            return;
+
+        listenerQueue.dispatch(new Runnable() {
+            @Override
+            public void run() {
+                connectionListener.linkDidReceiveFrame(link, frameData);
+            }
+        });
+    }
+
 }

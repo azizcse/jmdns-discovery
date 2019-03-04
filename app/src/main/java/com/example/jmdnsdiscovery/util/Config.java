@@ -22,7 +22,7 @@ public class Config
 
 	public static final int frameSizeMax = 50 * 1024 * 1024;
 
-	public static final int bnjHeartbeatInterval = 2 * 1000;
+	public static final int bnjHeartbeatInterval = 5 * 1000;
 	public static final int bnjTimeoutInterval = 7 * 1000;
 
 	// How long to discover for Bluetooth devices.
