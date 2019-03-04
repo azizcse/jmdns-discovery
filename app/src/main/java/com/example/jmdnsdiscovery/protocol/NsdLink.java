@@ -173,23 +173,22 @@ public class NsdLink implements Link {
 
         byte[] frameBytes;
 
-        {
-            Frames.Frame frame = outputQueue.poll();
-            if (frame == null) {
-                if (shouldCloseWhenOutputIsEmpty) {
-                    try {
-                        outputStream.close();
-                        socket.close();
-                    } catch (IOException e) {
-                    }
+        Frames.Frame frame = outputQueue.poll();
+        if (frame == null) {
+            if (shouldCloseWhenOutputIsEmpty) {
+                try {
+                    outputStream.close();
+                    socket.close();
+                } catch (IOException e) {
                 }
-
-                //Logger.debug("nsd link outputQueue empty");
-                return;
             }
 
-            frameBytes = frame.toByteArray();
+            //Logger.debug("nsd link outputQueue empty");
+            return;
         }
+
+        frameBytes = frame.toByteArray();
+
 
         if (!writeFrameBytes(frameBytes)) {
             outputQueue.clear();
@@ -220,6 +219,7 @@ public class NsdLink implements Link {
                 outputStream.close();
                 socket.close();
             } catch (IOException e) {
+                e.printStackTrace();
             }
 
             return false;
@@ -245,12 +245,12 @@ public class NsdLink implements Link {
         // Input thread.
         if (client) {
             try {
-                AppLog.v( "Socket connect host=" + host + " port =" + port);
+                AppLog.v("Socket connect host=" + host + " port =" + port);
 
 
                 this.socket = new Socket(host, port);
             } catch (IOException ex) {
-                AppLog.v("nsd link connect failed to host ="+ host+ " port ="+port);
+                AppLog.v("nsd link connect failed to host =" + host + " port =" + port);
                 notifyDisconnect();
                 return;
             }
@@ -314,7 +314,7 @@ public class NsdLink implements Link {
             inputStream = socket.getInputStream();
             outputStream = socket.getOutputStream();
         } catch (IOException ex) {
-           AppLog.v("nsd link streams get failed {}");
+            AppLog.v("nsd link streams get failed {}");
             return false;
         }
 
@@ -409,7 +409,7 @@ public class NsdLink implements Link {
             }
 
             if (inputData.readableBytes() < frameSize) {
-                AppLog.v("inputData.readableBytes() < frameSize ="+frameSize);
+                AppLog.v("inputData.readableBytes() < frameSize =" + frameSize);
                 inputData.resetReaderIndex();
                 break;
             }

@@ -56,6 +56,7 @@ public class MainActivity extends AppCompatActivity implements ConnectionListene
     @Override
     public void linkConnected(Link link) {
         linkList.add(link);
+        Toast.makeText(this,"Connected ="+link.getNodeId(), Toast.LENGTH_SHORT).show();
     }
 
     @Override
